@@ -26,7 +26,7 @@ PRIMARY_KEYS = {
     "pengeluaran": ["tahun", "triwulan", "kode_kategori", "jenis_data", "jenis_indikator", "indikator_pertumbuhan"],
     "pdrb_agregat": ["tahun", "triwulan", "jenis_data", "indikator_pertumbuhan"],
     "wilayah_kalteng": ["tahun", "triwulan", "kota", "indikator_pertumbuhan"],
-    "fenomena": ["pendekatan", "tahun", "triwulan", "kode_kategori", "indikator_pertumbuhan"],
+    "fenomena": ["pendekatan", "tahun", "triwulan", "kategori", "indikator"],
     "kategori_master": ["pendekatan", "kode_kategori"],
     "sumber_data": ["jenis_indikator", "indikator_pertumbuhan", "klasifikasi", "jenis_data"],
     "periode_tampil": ["tahun", "triwulan"],
@@ -489,9 +489,9 @@ OPSI_PENDEKATAN = ["lapangan_usaha", "pengeluaran"]
 OPSI_JENIS_DATA_SUMBER = ["adhk", "adhb"]
 OPSI_KLASIFIKASI_SUMBER = ["-", "lapangan_usaha", "pengeluaran"]
 
-# Khusus tabel fenomena_lapangan_usaha & fenomena_pengeluaran: tidak punya opsi "-"
-# karena setiap baris narasi memang harus terkait satu indikator pertumbuhan tertentu.
-OPSI_INDIKATOR_FENOMENA = ["yoy", "qtq", "ctc"]
+# Untuk fenomena yang dibedakan lewat kategori (bukan indikator pertumbuhan),
+# kolom indikator diisi "-" - jadi "-" ikut jadi opsi valid di sini.
+OPSI_INDIKATOR_FENOMENA = ["-", "yoy", "qtq", "ctc"]
 
 
 tab_agregat, tab_lapangan_usaha, tab_pengeluaran, tab_wilayah, tab_kategori, \
@@ -596,17 +596,20 @@ with tab_kategori:
 with tab_fenomena:
     render_editor_tabel_lebar(
         "fenomena",
-        kolom_kunci=["pendekatan", "tahun", "triwulan", "kode_kategori"],
-        kolom_pivot="indikator_pertumbuhan",
+        kolom_kunci=["pendekatan", "tahun", "triwulan", "kategori"],
+        kolom_pivot="indikator",
         kolom_nilai="teks",
-        daftar_kolom_lebar=["qtq", "yoy"],
+        daftar_kolom_lebar=["-", "qtq", "yoy", "ctc"],
         column_config_kunci={
             "pendekatan": st.column_config.SelectboxColumn("Pendekatan", options=OPSI_PENDEKATAN, required=True),
             "tahun": st.column_config.TextColumn("Tahun", required=True),
             "triwulan": st.column_config.SelectboxColumn("Triwulan", options=OPSI_TRIWULAN, required=True),
-            "kode_kategori": st.column_config.TextColumn(
+            "kategori": st.column_config.TextColumn(
                 "Kategori", required=True,
-                help="Isi 'UMUM' kalau narasinya bersifat umum, atau kode kategori spesifik (mis. A, B, C) sesuai Kategori Master"
+                help="Isi '-' kalau narasi ini dibedakan per indikator pertumbuhan "
+                     "-> isi teksnya di kolom qtq/yoy/ctc di samping. Atau isi nama "
+                     "kategori spesifik (mis. 'Konsumsi Rumah Tangga') kalau narasi "
+                     "ini dibedakan per kategori -> isi teksnya di kolom '-' saja."
             ),
         },
         tipe_nilai="teks",
