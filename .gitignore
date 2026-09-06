@@ -1,0 +1,9 @@
+.env
+*.db
+.streamlit/secrets.toml
+database_lokal.py
+Database_PDRB.xlsx
+migrate_data.py
+migrate_sqlite_to_supabase.py
+test_supabase.py
+__pycache__/

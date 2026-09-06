@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import json
 import textwrap
-from database import init_db, get_agregat, get_data_kategori, get_wilayah, get_fenomena, get_tren, get_link_sumber, get_urutan_kategori, get_periode_tersedia
+from database import init_db, get_agregat, get_data_kategori, get_wilayah, get_fenomena, get_semua_fenomena, get_tren, get_link_sumber, get_urutan_kategori, get_periode_tersedia
 from utils.styling import apply_custom_css
 
 # --------------------------------------------
@@ -585,20 +585,36 @@ def render_panel(data_lengkap, judul_grafik, key_halaman, pendekatan, item_per_h
 # --------------------------------------------
 def render_fenomena(pendekatan, judul_seksi):
     """
-    Menampilkan fenomena QtQ (kiri) dan YoY (kanan) berdampingan,
-    tidak lagi mengikuti dropdown Indikator di panel filter.
-    Kartu yang datanya belum ada/kosong TIDAK ditampilkan sama sekali
-    (bukan diganti pesan "belum tersedia") - kalau qtq & yoy dua-duanya
-    kosong, seluruh section (termasuk judul) ikut disembunyikan.
+    Menampilkan kartu-kartu fenomena berdampingan untuk (pendekatan, tahun,
+    triwulan) yang aktif. "Sumbu" pembeda antar kartu TIDAK selalu
+    indikator_pertumbuhan (qtq/yoy) - untuk beberapa pendekatan pembedanya
+    adalah kode_kategori (mis. nama kategori tertentu). Jadi tiap baris
+    diambil apa adanya dari database, dan judul kartunya ditentukan:
+      - kalau kode_kategori BUKAN placeholder umum ("UMUM"/"-") -> pakai
+        kode_kategori sebagai judul kartu
+      - kalau kode_kategori memang "UMUM"/"-" -> fallback ke
+        indikator_pertumbuhan (qtq/yoy/ctc) sebagai judul kartu, seperti semula
+
+    Section (termasuk judul) disembunyikan total kalau tidak ada satupun
+    baris fenomena yang datanya ada/tidak kosong.
     """
+    df_fenomena = get_semua_fenomena(pendekatan, tahun_dipilih, triwulan_dipilih)
+    if df_fenomena.empty:
+        return
+
     daftar_konten = []
-    for indikator in ["qtq", "yoy"]:
-        teks_fenomena = get_fenomena(
-            pendekatan, tahun_dipilih, triwulan_dipilih,
-            kode_kategori="UMUM", indikator_pertumbuhan=indikator
-        )
-        if teks_fenomena:
-            daftar_konten.append((indikator, teks_fenomena))
+    label_pendekatan_generik = pendekatan.replace("_", " ").strip().lower()
+    for _, baris in df_fenomena.iterrows():
+        kategori = str(baris["kategori"]).strip()
+        # Kategori dianggap "cuma placeholder" (bukan judul kartu yang berarti)
+        # kalau isinya UMUM/"-"/kosong, ATAU cuma mengulang nama pendekatan itu
+        # sendiri (mis. Kategori="Lapangan Usaha" utk pendekatan=lapangan_usaha)
+        # -- itu template lama yang sudah ada, tetap harus jatuh ke qtq/yoy.
+        if kategori.strip().lower() in ("umum", "-", "", label_pendekatan_generik):
+            label_kartu = label_indikator(baris["indikator"])
+        else:
+            label_kartu = kategori
+        daftar_konten.append((label_kartu, baris["teks"]))
 
     if not daftar_konten:
         return
@@ -611,12 +627,12 @@ def render_fenomena(pendekatan, judul_seksi):
     render_judul_grafik(judul_html, [])
 
     daftar_kolom = st.columns(len(daftar_konten))
-    for kolom, (indikator, teks_fenomena) in zip(daftar_kolom, daftar_konten):
+    for kolom, (label_kartu, teks_fenomena) in zip(daftar_kolom, daftar_konten):
         with kolom:
             st.markdown(
                 '<div style="border:3px solid #F07C2A; border-radius:16px; padding:20px 24px; '
                 'background-color:#FDF0DC; height:100%;">'
-                f'<p style="margin:0 0 10px 0; font-size:13px; font-weight:700; color:#C85A1A;">{label_indikator(indikator)}</p>'
+                f'<p style="margin:0 0 10px 0; font-size:13px; font-weight:700; color:#C85A1A;">{label_kartu}</p>'
                 f'<p style="margin:0; font-size:14px; line-height:1.8; color:#3D2A16; text-align:justify;">{teks_fenomena}</p>'
                 '</div>',
                 unsafe_allow_html=True

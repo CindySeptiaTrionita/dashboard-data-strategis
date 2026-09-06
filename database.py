@@ -96,10 +96,10 @@ def init_db():
             pendekatan TEXT,
             tahun TEXT,
             triwulan TEXT,
-            kode_kategori TEXT,
-            indikator_pertumbuhan TEXT,
+            kategori TEXT,
+            indikator TEXT,
             teks TEXT,
-            PRIMARY KEY (pendekatan, tahun, triwulan, kode_kategori, indikator_pertumbuhan)
+            PRIMARY KEY (pendekatan, tahun, triwulan, kategori, indikator)
         )
     """)
 
@@ -342,15 +342,15 @@ def get_wilayah(tahun, triwulan, indikator_pertumbuhan="yoy"):
     return df
 
 
-def get_fenomena(pendekatan, tahun, triwulan, kode_kategori, indikator_pertumbuhan):
+def get_fenomena(pendekatan, tahun, triwulan, kategori, indikator):
     """Balikin teks narasi fenomena, atau None kalau datanya belum ada/kosong/"nan"."""
     if not _periode_diizinkan(tahun, triwulan):
         return None
     conn = get_connection()
     df = pd.read_sql(
         """SELECT teks FROM fenomena
-           WHERE pendekatan=%s AND tahun=%s AND triwulan=%s AND kode_kategori=%s AND indikator_pertumbuhan=%s""",
-        conn, params=(pendekatan, tahun, triwulan, kode_kategori, indikator_pertumbuhan)
+           WHERE pendekatan=%s AND tahun=%s AND triwulan=%s AND kategori=%s AND indikator=%s""",
+        conn, params=(pendekatan, tahun, triwulan, kategori, indikator)
     )
     conn.close()
     if df.empty:
@@ -359,6 +359,39 @@ def get_fenomena(pendekatan, tahun, triwulan, kode_kategori, indikator_pertumbuh
     if teks == "" or teks.lower() in ("nan", "none"):
         return None
     return teks
+
+
+def get_semua_fenomena(pendekatan, tahun, triwulan):
+    """
+    Balikin SEMUA baris fenomena untuk satu (pendekatan, tahun, triwulan),
+    apapun isi kategori & indikator-nya.
+
+    Dipakai karena "sumbu" pembeda fenomena ternyata beda-beda tergantung
+    pendekatan: untuk lapangan_usaha biasanya dibedakan per indikator
+    (qtq/yoy), tapi untuk pengeluaran (atau kombinasi lain) bisa saja
+    dibedakan lewat kategori (mis. nama kategori tertentu, bukan "-"/"UMUM").
+    Jadi judul tiap kartu di app.py ditentukan belakangan: pakai kategori
+    kalau itu bukan placeholder umum ("UMUM"/"-"/nama pendekatan sendiri),
+    kalau tidak baru fallback ke indikator (qtq/yoy/ctc).
+
+    Balikin DataFrame kolom: kategori, indikator, teks
+    (baris dengan teks kosong/"nan"/"none" sudah dibuang).
+    """
+    if not _periode_diizinkan(tahun, triwulan):
+        return pd.DataFrame(columns=["kategori", "indikator", "teks"])
+    conn = get_connection()
+    df = pd.read_sql(
+        """SELECT kategori, indikator, teks FROM fenomena
+           WHERE pendekatan=%s AND tahun=%s AND triwulan=%s
+           ORDER BY kategori, indikator""",
+        conn, params=(pendekatan, tahun, triwulan)
+    )
+    conn.close()
+    if df.empty:
+        return df
+    df["teks"] = df["teks"].astype(str).str.strip()
+    df = df[~df["teks"].str.lower().isin(["", "nan", "none"])]
+    return df.reset_index(drop=True)
 
 
 # ==============================================
@@ -557,7 +590,21 @@ def upload_sumber_data_dari_sheet(df_sheet):
 def upload_fenomena_dari_sheet(df_sheet):
     """
     df_sheet: hasil pd.read_excel() dari sheet 'Fenomena'
-    Format kolom: Jenis Klasifikasi, Tahun, Triwulan, Kategori, qtq, yoy
+    Format kolom (long/1 baris = 1 kartu): Jenis Klasifikasi, Tahun, Triwulan,
+    Kategori, Indikator, Teks
+
+    - Kategori : nama kategori/topik kalau fenomena ini dibedakan per kategori
+                 (mis. "Konsumsi Rumah Tangga"). Kosongkan / isi "-" kalau
+                 fenomena ini dibedakan lewat kolom Indikator, bukan kategori.
+    - Indikator: "qtq" / "yoy" / "ctc" kalau fenomena ini dibedakan per
+                 indikator pertumbuhan. Kosongkan / isi "-" kalau dibedakan
+                 lewat Kategori.
+    - Teks     : narasi lengkapnya (wajib diisi, baris dengan Teks kosong
+                 otomatis dilewati).
+
+    Minimal salah SATU dari Kategori/Indikator berisi nilai yang bermakna
+    per baris, supaya render_fenomena() di app.py tau mana yang dipakai jadi
+    judul kartu.
     """
     df = df_sheet.copy()
     df.columns = [str(c).strip() for c in df.columns]
@@ -570,35 +617,32 @@ def upload_fenomena_dari_sheet(df_sheet):
     df["pendekatan"] = df["Jenis Klasifikasi"].astype(str).str.strip().str.lower().map(peta_pendekatan)
     df = df.dropna(subset=["pendekatan"])
 
-    df_panjang = df.melt(
-        id_vars=["tahun", "triwulan", "pendekatan"],
-        value_vars=[k for k in ["qtq", "yoy"] if k in df.columns],
-        var_name="indikator_pertumbuhan",
-        value_name="teks"
-    )
-    df_panjang = df_panjang[df_panjang["teks"].notna()]
-    df_panjang["teks"] = df_panjang["teks"].astype(str).str.strip()
-    df_panjang = df_panjang[
-        (df_panjang["teks"] != "") &
-        (df_panjang["teks"].str.lower() != "nan") &
-        (df_panjang["teks"] != "None")
-    ]
-    df_panjang["kode_kategori"] = "UMUM"
+    def bersihkan_kolom(nama_kolom, nilai_default):
+        if nama_kolom in df.columns:
+            hasil = df[nama_kolom].astype(str).str.strip()
+            return hasil.replace({"": nilai_default, "nan": nilai_default, "None": nilai_default})
+        return pd.Series(nilai_default, index=df.index)
+
+    df["kategori"] = bersihkan_kolom("Kategori", "UMUM")
+    df["indikator"] = bersihkan_kolom("Indikator", "-").str.lower()
+    df["teks"] = bersihkan_kolom("Teks", "")
+
+    df = df[(df["teks"] != "") & (df["teks"].str.lower() != "nan") & (df["teks"] != "None")]
 
     conn = get_connection()
     cursor = conn.cursor()
     cursor.executemany(
         """INSERT INTO fenomena
-               (pendekatan, tahun, triwulan, kode_kategori, indikator_pertumbuhan, teks)
+               (pendekatan, tahun, triwulan, kategori, indikator, teks)
            VALUES (%s, %s, %s, %s, %s, %s)
-           ON CONFLICT (pendekatan, tahun, triwulan, kode_kategori, indikator_pertumbuhan)
+           ON CONFLICT (pendekatan, tahun, triwulan, kategori, indikator)
            DO UPDATE SET teks = EXCLUDED.teks""",
-        df_panjang[["pendekatan", "tahun", "triwulan", "kode_kategori", "indikator_pertumbuhan", "teks"]]
+        df[["pendekatan", "tahun", "triwulan", "kategori", "indikator", "teks"]]
             .itertuples(index=False, name=None)
     )
     conn.commit()
     conn.close()
-    return len(df_panjang)
+    return len(df)
 
 
 def get_tren(indikator_pertumbuhan="yoy", tahun=None, triwulan=None, jumlah_periode=9):
