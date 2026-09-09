@@ -194,6 +194,7 @@ def init_db():
 # FUNGSI ATUR TAMPILAN PERIODE (tahun+triwulan mana yang boleh tampil)
 # ==============================================
 
+@st.cache_data
 def get_periode_yang_ditampilkan():
     """
     Ambil set (tahun, triwulan) yang statusnya tampil=1.
@@ -228,6 +229,7 @@ def _hanya_periode_tampil(df):
     return df[mask].reset_index(drop=True)
 
 
+@st.cache_data
 def get_urutan_kategori(pendekatan):
     """
     Ambil urutan kode_kategori PERSIS seperti urutan penyimpanannya di
@@ -242,6 +244,7 @@ def get_urutan_kategori(pendekatan):
     return df["kode_kategori"].tolist()
 
 
+@st.cache_data
 def get_opsi_kolom(nama_tabel, kolom):
     """Ambil daftar nilai unik (non-null) dari satu kolom di suatu tabel."""
     conn = get_connection()
@@ -264,6 +267,7 @@ def _periode_diizinkan(tahun, triwulan):
     return periode_ok is None or (str(tahun), str(triwulan)) in periode_ok
 
 
+@st.cache_data
 def get_data_kategori(pendekatan, tahun, triwulan, jenis_data=None, jenis_indikator=None, indikator_pertumbuhan=None):
     if not _periode_diizinkan(tahun, triwulan):
         return pd.DataFrame()
@@ -294,6 +298,7 @@ def get_data_kategori(pendekatan, tahun, triwulan, jenis_data=None, jenis_indika
     return df
 
 
+@st.cache_data
 def get_agregat(tahun, triwulan, jenis_data=None, indikator_pertumbuhan=None):
     if not _periode_diizinkan(tahun, triwulan):
         return pd.DataFrame()
@@ -311,6 +316,7 @@ def get_agregat(tahun, triwulan, jenis_data=None, indikator_pertumbuhan=None):
     return df
 
 
+@st.cache_data
 def get_periode_tersedia():
     """
     Ambil daftar (tahun, triwulan) yang datanya SUDAH ADA di pdrb_agregat
@@ -330,6 +336,7 @@ def get_periode_tersedia():
     return df
 
 
+@st.cache_data
 def get_wilayah(tahun, triwulan, indikator_pertumbuhan="yoy"):
     if not _periode_diizinkan(tahun, triwulan):
         return pd.DataFrame()
@@ -342,6 +349,7 @@ def get_wilayah(tahun, triwulan, indikator_pertumbuhan="yoy"):
     return df
 
 
+@st.cache_data
 def get_fenomena(pendekatan, tahun, triwulan, kategori, indikator):
     """Balikin teks narasi fenomena, atau None kalau datanya belum ada/kosong/"nan"."""
     if not _periode_diizinkan(tahun, triwulan):
@@ -361,6 +369,7 @@ def get_fenomena(pendekatan, tahun, triwulan, kategori, indikator):
     return teks
 
 
+@st.cache_data
 def get_semua_fenomena(pendekatan, tahun, triwulan):
     """
     Balikin SEMUA baris fenomena untuk satu (pendekatan, tahun, triwulan),
@@ -645,6 +654,7 @@ def upload_fenomena_dari_sheet(df_sheet):
     return len(df)
 
 
+@st.cache_data
 def get_tren(indikator_pertumbuhan="yoy", tahun=None, triwulan=None, jumlah_periode=9):
     """
     Ambil histori laju pertumbuhan sepanjang jendela bergulir (rolling window)
@@ -680,6 +690,7 @@ def get_tren(indikator_pertumbuhan="yoy", tahun=None, triwulan=None, jumlah_peri
     return df.iloc[idx_awal:idx_akhir + 1].reset_index(drop=True)
 
 
+@st.cache_data
 def get_tabel_lengkap(pendekatan, tahun=None, triwulan=None, jenis_data=None, indikator_pertumbuhan=None):
     """Ambil data lapangan_usaha/pengeluaran, balikin ke format lebar (kayak Excel asli)"""
     nama_tabel = pendekatan
@@ -720,6 +731,7 @@ def get_tabel_lengkap(pendekatan, tahun=None, triwulan=None, jenis_data=None, in
     return df_lebar
 
 
+@st.cache_data
 def get_tabel_wilayah(tahun=None, triwulan=None, indikator_pertumbuhan=None):
     """Ambil data wilayah_kalteng, balikin ke format lebar."""
     conn = get_connection()
@@ -753,6 +765,7 @@ def get_tabel_wilayah(tahun=None, triwulan=None, indikator_pertumbuhan=None):
     return df_lebar
 
 
+@st.cache_data
 def get_tabel_agregat(tahun=None, triwulan=None, jenis_data=None, indikator_pertumbuhan=None):
     """Ambil data pdrb_agregat sesuai filter."""
     conn = get_connection()
@@ -784,6 +797,7 @@ def get_tabel_agregat(tahun=None, triwulan=None, jenis_data=None, indikator_pert
     return df
 
 
+@st.cache_data
 def get_link_sumber(jenis_indikator, klasifikasi="-", jenis_data="-", indikator_pertumbuhan="-"):
     """
     Ambil SATU link sumber data yang cocok dengan kombinasi filter sebuah
@@ -807,6 +821,7 @@ def get_link_sumber(jenis_indikator, klasifikasi="-", jenis_data="-", indikator_
     return df.iloc[0]["link"]
 
 
+@st.cache_data
 def get_tabel_sumber_data(jenis_data=None, indikator_pertumbuhan=None):
     """Ambil data sumber_data sesuai filter."""
     conn = get_connection()

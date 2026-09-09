@@ -524,7 +524,7 @@ def buat_bar_chart(data, judul_grafik):
     )
     return fig
 
-
+@st.fragment
 def render_panel(data_lengkap, judul_grafik, key_halaman, pendekatan, item_per_halaman=5):
     if data_lengkap.empty:
         st.markdown(
