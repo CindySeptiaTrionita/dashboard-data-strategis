@@ -919,7 +919,7 @@ with col_kiri:
     with st.container(key="panel_kiri"):
         render_panel(
             data_lapangan_usaha_full,
-            f"SUMBER PERTUMBUHAN PDRB MENURUT LAPANGAN USAHA TRIWULAN {triwulan_dipilih} {tahun_dipilih} ({label_indikator(indikator_dipilih)})",
+            f"SUMBER PERTUMBUHAN PDRB MENURUT LAPANGAN USAHA TRIWULAN {triwulan_dipilih} {tahun_dipilih} ({label_indikator(indikator_dipilih)}) (persen)",
             key_halaman="halaman_kiri",
             pendekatan="lapangan_usaha"
         )
@@ -928,7 +928,7 @@ with col_kanan:
     with st.container(key="panel_kanan"):
         render_panel(
             data_pengeluaran_full,
-            f"SUMBER PERTUMBUHAN PDRB MENURUT PENGELUARAN TRIWULAN {triwulan_dipilih} {tahun_dipilih} ({label_indikator(indikator_dipilih)})",
+            f"SUMBER PERTUMBUHAN PDRB MENURUT PENGELUARAN TRIWULAN {triwulan_dipilih} {tahun_dipilih} ({label_indikator(indikator_dipilih)}) (persen)",
             key_halaman="halaman_kanan",
             pendekatan="pengeluaran"
         )
@@ -948,7 +948,7 @@ st.divider()
 # --------------------------------------------
 # TABEL PDRB PER TRIWULAN - LAPANGAN USAHA
 # --------------------------------------------
-render_tabel_triwulan("lapangan_usaha", f"Tabel Nilai PDRB per Triwulan menurut Lapangan Usaha Tahun {tahun_dipilih}")
+render_tabel_triwulan("lapangan_usaha", f"Tabel Nilai PDRB per Triwulan menurut Lapangan Usaha Tahun {tahun_dipilih} (Miliar Rupiah)")
 
 st.divider()
 
@@ -956,7 +956,7 @@ st.divider()
 # --------------------------------------------
 # DISTRIBUSI (%) vs LAJU PERTUMBUHAN (%) - LAPANGAN USAHA
 # --------------------------------------------
-render_distribusi_laju("lapangan_usaha", "Distribusi dan Laju Pertumbuhan PDRB Menurut Lapangan Usaha", indikator_dipilih)
+render_distribusi_laju("lapangan_usaha", "Distribusi dan Laju Pertumbuhan PDRB Menurut Lapangan Usaha (persen)", indikator_dipilih)
 
 st.divider()
 
@@ -972,7 +972,7 @@ st.divider()
 # --------------------------------------------
 # TABEL PDRB PER TRIWULAN - PENGELUARAN
 # --------------------------------------------
-render_tabel_triwulan("pengeluaran", f"Tabel Nilai PDRB per Triwulan menurut Pengeluaran Tahun {tahun_dipilih}")
+render_tabel_triwulan("pengeluaran", f"Tabel Nilai PDRB per Triwulan menurut Pengeluaran Tahun {tahun_dipilih} (Miliar Rupiah)")
 
 st.divider()
 
@@ -980,7 +980,7 @@ st.divider()
 # --------------------------------------------
 # DISTRIBUSI (%) vs LAJU PERTUMBUHAN (%) - PENGELUARAN
 # --------------------------------------------
-render_distribusi_laju("pengeluaran", "Distribusi dan Laju Pertumbuhan PDRB Menurut Pengeluaran", indikator_dipilih)
+render_distribusi_laju("pengeluaran", "Distribusi dan Laju Pertumbuhan PDRB Menurut Pengeluaran (persen)", indikator_dipilih)
 
 st.divider()
 
@@ -991,7 +991,7 @@ st.divider()
 # --------------------------------------------
 judul_wilayah_html = (
     "<h3 style='margin:0;'>Laju Pertumbuhan PDRB Kabupaten/Kota se-Kalimantan Tengah "
-    f"<span style='font-style:italic; font-weight:400;'>(Indikator pertumbuhan : {label_indikator(indikator_dipilih)})</span></h3>"
+    f"<span style='font-style:italic; font-weight:400;'>(Indikator pertumbuhan : {label_indikator(indikator_dipilih)}) (persen)</span></h3>"
 )
 link_wilayah = get_link_sumber(
     jenis_indikator="Laju Pertumbuhan Kalteng",
