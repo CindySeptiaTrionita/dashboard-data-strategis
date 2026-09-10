@@ -1338,7 +1338,7 @@ with col_publikasi:
                     f'<a href="{link_publikasi}" target="_blank" rel="noopener noreferrer" '
                     'style="background-color:#C85A1A; color:white; text-decoration:none; font-weight:700; '
                     'font-size:13px; padding:10px 22px; border-radius:20px; display:inline-block; white-space:nowrap;">'
-                    f'📖 {teks_tombol_publikasi}</a>'
+                    f'{teks_tombol_publikasi}</a>'
                 )
             else:
                 tombol_publikasi_html = (
