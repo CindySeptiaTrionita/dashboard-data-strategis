@@ -186,6 +186,23 @@ def init_db():
         )
     """)
 
+    # --------------------------------------------
+    # TABEL 10: publikasi_pdrb
+    # Link publikasi PDRB per tahun & jenis data (Lapangan Usaha/
+    # Pengeluaran). Dipisah dari tabel sumber_data karena butuh logika
+    # pencarian sendiri: kalau tahun yang dipilih di filter belum ada
+    # publikasinya, ambil publikasi tahun TERDEKAT DI BAWAHNYA (lihat
+    # get_link_publikasi).
+    # --------------------------------------------
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS publikasi_pdrb (
+            tahun TEXT,
+            jenis_data TEXT,
+            link TEXT,
+            PRIMARY KEY (tahun, jenis_data)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -819,6 +836,94 @@ def get_link_sumber(jenis_indikator, klasifikasi="-", jenis_data="-", indikator_
     if df.empty:
         return None
     return df.iloc[0]["link"]
+
+
+@st.cache_data
+def get_link_publikasi(tahun, jenis_data):
+    """
+    Ambil link publikasi PDRB untuk kartu "Publikasi PDRB", dengan aturan:
+      - jenis_data harus SAMA (case-insensitive) dengan pilihan filter
+        "Jenis Data" (Lapangan Usaha / Pengeluaran) - tidak nyasar ke
+        jenis_data lain.
+      - hanya boleh tahun publikasi <= tahun yang dipilih di filter
+        (tidak menampilkan publikasi dari tahun yang lebih baru/"masa
+        depan" dibanding data yang sedang dilihat).
+      - dari yang memenuhi dua syarat di atas, ambil tahun PALING BESAR
+        (paling dekat/terbaru).
+    Balikin None kalau tidak ada satupun tahun yang cocok - dashboard
+    lalu menampilkan status "belum tersedia", TANPA mencari jenis_data
+    lain sebagai pengganti.
+    """
+    conn = get_connection()
+    df = pd.read_sql(
+        """
+        SELECT tahun, link FROM publikasi_pdrb
+        WHERE TRIM(LOWER(jenis_data)) = TRIM(LOWER(%s))
+          AND tahun::INTEGER <= %s::INTEGER
+        ORDER BY tahun::INTEGER DESC
+        LIMIT 1
+        """,
+        conn, params=(jenis_data, tahun)
+    )
+    conn.close()
+    if df.empty:
+        return None
+    return df.iloc[0]["link"]
+
+
+@st.cache_data
+def get_tabel_publikasi(jenis_data=None):
+    """Ambil seluruh data publikasi_pdrb sesuai filter (dipakai halaman Admin)."""
+    conn = get_connection()
+    query = "SELECT * FROM publikasi_pdrb"
+    params = []
+    if jenis_data:
+        query += " WHERE TRIM(LOWER(jenis_data)) = TRIM(LOWER(%s))"
+        params.append(jenis_data)
+    df = pd.read_sql(query, conn, params=params)
+    conn.close()
+    if df.empty:
+        return df
+    return df.sort_values(["jenis_data", "tahun"]).reset_index(drop=True)
+
+
+def upload_publikasi_dari_sheet(df_sheet):
+    """
+    df_sheet: hasil pd.read_excel() dari sheet berisi daftar publikasi PDRB.
+    Format kolom: Tahun, Jenis Data, Link
+    """
+    df = df_sheet.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+    df = df.rename(columns={
+        "Tahun": "tahun",
+        "Jenis Data": "jenis_data",
+        "Link": "link",
+    })
+
+    kolom_wajib = ["tahun", "jenis_data", "link"]
+    df = df[[k for k in kolom_wajib if k in df.columns]].copy()
+    df = df.dropna(how="all")
+
+    for k in kolom_wajib:
+        if k in df.columns:
+            df[k] = df[k].astype(str).str.strip()
+
+    df = df.dropna(subset=["tahun", "jenis_data"])
+    df = df[(df["tahun"] != "") & (df["jenis_data"] != "")]
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.executemany(
+        """INSERT INTO publikasi_pdrb
+               (tahun, jenis_data, link)
+           VALUES (%s, %s, %s)
+           ON CONFLICT (tahun, jenis_data)
+           DO UPDATE SET link = EXCLUDED.link""",
+        df[kolom_wajib].itertuples(index=False, name=None)
+    )
+    conn.commit()
+    conn.close()
+    return len(df)
 
 
 @st.cache_data

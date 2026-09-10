@@ -1,10 +1,11 @@
 import streamlit as st
+import os
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import json
 import textwrap
-from database import init_db, get_agregat, get_data_kategori, get_wilayah, get_fenomena, get_semua_fenomena, get_tren, get_link_sumber, get_urutan_kategori, get_periode_tersedia
+from database import init_db, get_agregat, get_data_kategori, get_wilayah, get_fenomena, get_semua_fenomena, get_tren, get_link_sumber, get_link_publikasi, get_urutan_kategori, get_periode_tersedia
 from utils.styling import apply_custom_css
 
 # --------------------------------------------
@@ -13,6 +14,21 @@ from utils.styling import apply_custom_css
 init_db()
 st.set_page_config(page_title="Dashboard PDRB", layout="wide")
 apply_custom_css()
+
+import base64
+
+@st.cache_data
+def muat_gambar_base64(path_file):
+    """Baca file gambar lokal, ubah jadi teks base64 supaya bisa
+    ditempel langsung di tag <img> HTML (path Windows biasa tidak bisa
+    diakses langsung oleh browser)."""
+    try:
+        with open(path_file, "rb") as f:
+            data = f.read()
+        ekstensi = path_file.split(".")[-1]
+        return f"data:image/{ekstensi};base64,{base64.b64encode(data).decode()}"
+    except FileNotFoundError:
+        return None
 
 st.markdown("""
 <style>
@@ -42,15 +58,43 @@ st.markdown("""
         flex: 1;
         width: 100%;
     }
-    .st-key-panel_kiri, .st-key-panel_kanan {
-        border: 3px dashed #F07C2A;
+    .st-key-panel_kiri, .st-key-panel_kanan_wrapper {
         border-radius: 16px;
-        padding: 16px;
         box-sizing: border-box;
         display: flex;
         flex-direction: column;
         flex: 1;
         position: relative;
+    }
+    .st-key-panel_kiri {
+        border: 3px dashed #F07C2A;
+        padding: 16px;
+    }
+    /* Wrapper baru yang membungkus 2 card kanan (Publikasi PDRB +
+       Layanan BPS). Defaultnya ditumpuk vertikal (column) dan
+       tinggi totalnya mengikuti tinggi panel_kiri di sebelahnya lewat
+       flex:1 yang sama-sama diberi ke kedua card di dalamnya, supaya
+       total tinggi keduanya otomatis menyamai panel kiri. */
+    .st-key-panel_kanan_wrapper {
+        gap: 16px;
+        height: 100%;
+    }
+    .st-key-panel_kanan, .st-key-panel_kanan_kontak {
+        border: 3px dashed #F07C2A;
+        border-radius: 16px;
+        padding: 16px;
+        box-sizing: border-box;
+        flex: 1;
+        margin: 0 !important;
+    }
+    /* Layar sempit: wrapper 2 card kanan diubah jadi sejajar (row)
+       supaya urutan akhirnya: [Sumber Pertumbuhan] di atas (lebar
+       penuh), lalu [Publikasi PDRB][Layanan BPS] sejajar di bawahnya -
+       bukan ditumpuk 3 baris ke bawah. */
+    @media (max-width: 640px) {
+        .st-key-panel_kanan_wrapper {
+            flex-direction: row;
+        }
     }
     /* Pengecualian: kalau sumber data tidak ada, container TIDAK usah
        dipaksa ikut setinggi panel sebelahnya - biarkan tinggi mengikuti
@@ -164,10 +208,96 @@ st.markdown("""
     div[class*="st-key-panel_header_"] div[data-testid="stSelectbox"] > div > div {
         background-color: #FBE4A6 !important;
     }
-    .st-key-panel_header_filter,
     .st-key-panel_header_indikator,
     .st-key-panel_header_nilai {
         min-height: 250px;
+    }
+
+    /* --------------------------------------------
+       FILTER DATA - bar horizontal di bawah panel Indikator & Nilai PDRB
+    -------------------------------------------- */
+    .st-key-panel_filter_bar {
+        background-color: #FFFFFF;
+        border-radius: 16px;
+        box-shadow: 0 2px 10px rgba(122, 59, 16, 0.10);
+        padding: 0 20px 20px 20px;
+        margin-bottom: 24px;
+    }
+    .st-key-panel_filter_bar .judul-panel-filter {
+        margin: 0 -20px 18px -20px;
+        padding: 16px 20px;
+        background-color: #C85A1A;
+        border-radius: 16px 16px 0 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+    .st-key-panel_filter_bar .judul-panel-filter span.ikon {
+        font-size: 18px;
+        line-height: 1;
+    }
+    .st-key-panel_filter_bar .judul-panel-filter span.teks {
+        color: white;
+        font-weight: 800;
+        font-size: 15px;
+        letter-spacing: 0.3px;
+    }
+    .st-key-panel_hero_intro {
+        background-color: #FBF1DE;
+        border-radius: 20px;
+        padding: 20px 20px 4px 20px;
+        margin-bottom: 24px;
+        box-shadow: 0 2px 10px rgba(122, 59, 16, 0.08);
+    }
+    .st-key-panel_hero_intro div[data-testid="stHorizontalBlock"] {
+        align-items: center;
+    }
+
+    .st-key-panel_filter_bar div[data-testid="stHorizontalBlock"] {
+        align-items: center;
+    }
+    .st-key-panel_filter_bar label[data-testid="stWidgetLabel"] p {
+        font-weight: 700 !important;
+        font-size: 12px !important;
+        color: #7A3B10 !important;
+        margin-bottom: 2px !important;
+    }
+    .st-key-panel_filter_bar div[data-testid="stSelectbox"] > div > div {
+        background-color: #FDE9A8 !important;
+        border: 2px solid #C85A1A !important;
+        border-radius: 12px !important;
+    }
+
+    /* --------------------------------------------
+       KARTU "MEMAHAMI PERTUMBUHAN EKONOMI" - pakai CSS Grid dengan
+       jumlah kolom yang diatur eksplisit per breakpoint, supaya
+       komposisi saat turun ke baris baru selalu rapi:
+       5 (desktop) -> 3+2 -> 2+2+1 -> 1+1+1+1+1 (paling sempit).
+    -------------------------------------------- */
+    .baris-kartu-penjelasan {
+        display: grid !important;
+        grid-template-columns: repeat(1, 1fr);
+        gap: 14px !important;
+    }
+    @media (min-width: 481px) {
+        .baris-kartu-penjelasan {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    @media (min-width: 821px) {
+        .baris-kartu-penjelasan {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+    @media (min-width: 1151px) {
+        .baris-kartu-penjelasan {
+            grid-template-columns: repeat(5, 1fr);
+        }
+        /* Panah penghubung (›) SENGAJA dihapus - berdasarkan masukan
+           sosialisasi, kartu-kartu ini jadi terlalu ramai/bertumpuk kalau
+           dikasih dekorasi panah di antaranya. */
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -182,10 +312,11 @@ st.markdown("""
 <div style="position:relative; background-color:#C85A1A; padding:24px 0; margin-bottom:24px;
             box-shadow: 0 0 0 100vmax #C85A1A; clip-path: inset(0 -100vmax);">
     <h1 style="color:white; font-size:32px; font-weight:800; margin:0;">
-        PERTUMBUHAN EKONOMI KOTA PALANGKA RAYA
+        SISTEM INFORMASI PERTUMBUHAN EKONOMI (SIMPONI)
     </h1>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
@@ -239,58 +370,213 @@ def label_indikator(kode):
 
 
 # --------------------------------------------
-# 3 PANEL: FILTER / INDIKATOR UTAMA / NILAI PDRB
+# SECTION: MEMAHAMI PERTUMBUHAN EKONOMI (penjelasan singkat PDRB)
+# Konten 5 kartu ini statis (bukan dari database) - dibuat untuk
+# menjawab masukan sosialisasi soal perlunya penjelasan ringkas
+# mengenai Harga Berlaku, Harga Konstan, Distribusi, Laju
+# Pertumbuhan, dan Sumber Pertumbuhan sebelum pengguna masuk ke
+# panel Filter & angka-angka PDRB.
 # --------------------------------------------
+def pecahan(atas, bawah):
+    """Render pembagian (a/b) sebagai pecahan atas-bawah (bukan simbol /)."""
+    return (
+        '<span style="display:inline-flex; flex-direction:column; align-items:center; '
+        'vertical-align:middle; line-height:1.2; margin:0 4px; font-size:0.95em;">'
+        f'<span style="border-bottom:1.5px solid currentColor; padding:0 4px;">{atas}</span>'
+        f'<span style="padding:0 4px;">{bawah}</span>'
+        '</span>'
+    )
+
+DAFTAR_KARTU_PENJELASAN = [
+    {
+        "nomor": "01",
+        "ikon": "🪙",
+        "warna_utama": "#C85A1A",
+        "warna_bg": "#FDF0DC",
+        "judul": "Seberapa Besar?",
+        "deskripsi": "Melihat nilai ekonomi yang dihasilkan suatu daerah, dinilai berdasarkan harga yang berlaku saat itu.",
+        "formula": "PDRB ADHB = Σ (Pₜ × Qₜ)",
+        "keterangan": [
+            ("Pₜ", "harga barang/jasa pada periode t"),
+            ("Qₜ", "jumlah barang/jasa pada periode t"),
+        ],
+        "tag": "PDRB ADHB (Harga Berlaku)",
+    },
+    {
+        "nomor": "02",
+        "ikon": "📈",
+        "warna_utama": "#B9530F",
+        "warna_bg": "#FBE6CE",
+        "judul": "Apakah Tumbuh?",
+        "deskripsi": "Melihat perkembangan ekonomi secara riil, tanpa pengaruh perubahan harga (inflasi).",
+        "formula": "PDRB ADHK = Σ (P₀ × Qₜ)",
+        "keterangan": [
+            ("P₀", "harga pada tahun dasar"),
+            ("Qₜ", "jumlah barang/jasa pada periode t"),
+        ],
+        "tag": "PDRB ADHK (Harga Konstan)",
+    },
+    {
+        "nomor": "03",
+        "ikon": "🧭",
+        "warna_utama": "#A8460C",
+        "warna_bg": "#F9DCBE",
+        "judul": "Siapa yang Berperan?",
+        "deskripsi": "Melihat seberapa besar kontribusi setiap lapangan usaha atau komponen pengeluaran terhadap total PDRB.",
+        "formula": f"Distribusi = ({pecahan('PDRBᵢ', 'PDRB total')}) × 100%",
+        "keterangan": [
+            ("PDRBᵢ", "PDRB kategori ke-i"),
+            ("PDRB total", "total PDRB"),
+        ],
+        "tag": "Distribusi PDRB",
+    },
+    {
+        "nomor": "04",
+        "ikon": "📊",
+        "warna_utama": "#97390A",
+        "warna_bg": "#F7D3AE",
+        "judul": "Bagaimana Arahnya?",
+        "deskripsi": "Melihat seberapa cepat perekonomian tumbuh atau mengalami kontraksi dari waktu ke waktu.",
+        "formula": f"Laju = (({pecahan('PDRBₜ', 'PDRBₜ₋₁')}) − 1) × 100%",
+        "keterangan": [
+            ("PDRBₜ", "PDRB periode berjalan"),
+            ("PDRBₜ₋₁", "PDRB periode sebelumnya"),
+        ],
+        "tag": "Laju Pertumbuhan Ekonomi",
+    },
+    {
+        "nomor": "05",
+        "ikon": "🥧",
+        "warna_utama": "#C85A1A",
+        "warna_bg": "#FDE9CE",
+        "judul": "Apa Sumber Pertumbuhannya?",
+        # "catatan": "Nah, ini yang paling penting dibedakan dari distribusi.",
+        "deskripsi": "Menunjukkan kontribusi masing-masing kategori terhadap laju pertumbuhan ekonomi secara keseluruhan.",
+        "formula": f"Sumberᵢ = ({pecahan('ΔPDRBᵢ', 'PDRB totalₜ₋₁')}) × 100%",
+        "keterangan": [
+            ("ΔPDRBᵢ", "perubahan PDRB kategori ke-i"),
+            ("PDRB totalₜ₋₁", "total PDRB periode sebelumnya"),
+        ],
+        "tag": "Sumber Pertumbuhan Ekonomi",
+    },
+]
+
+def html_kartu_penjelasan(kartu):
+    catatan_html = ""
+    if kartu.get("catatan"):
+        catatan_html = (
+            f'<p style="margin:0 0 10px 0; font-size:11.5px; font-style:italic; font-weight:700; '
+            f'color:{kartu["warna_utama"]}; line-height:1.5;">{kartu["catatan"]}</p>'
+        )
+
+    baris_keterangan = "".join(
+        f'<div style="margin-bottom:2px;"><span style="font-weight:700; color:#3D2A16;">{notasi}</span>'
+        f' = {arti}</div>'
+        for notasi, arti in kartu.get("keterangan", [])
+    )
+    keterangan_html = ""
+    if baris_keterangan:
+        keterangan_html = (
+            '<div style="font-size:11px; color:#5C4630; line-height:1.6; margin-bottom:10px;">'
+            f'<div style="font-weight:800; color:#3D2A16; margin-bottom:2px;">Keterangan:</div>'
+            f'{baris_keterangan}'
+            '</div>'
+        )
+
+    return (
+        f'<div class="kartu-penjelasan" style="background-color:{kartu["warna_bg"]}; border-radius:16px; '
+        'padding:20px; display:flex; flex-direction:column; min-height:300px; box-sizing:border-box;">'
+        '<div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">'
+        f'<div style="width:30px; height:30px; border-radius:50%; background-color:{kartu["warna_utama"]}; '
+        'color:white; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:12px; flex-shrink:0;">'
+        f'{kartu["nomor"]}</div>'
+        f'<span style="font-size:22px;">{kartu["ikon"]}</span>'
+        '</div>'
+        f'<p style="margin:0 0 8px 0; font-weight:800; font-size:15px; color:#3D2A16;">{kartu["judul"]}</p>'
+        f'{catatan_html}'
+        f'<p style="margin:0 0 12px 0; font-size:12px; color:#5C4630; line-height:1.6;">{kartu["deskripsi"]}</p>'
+        f'<div style="background-color:white; border-radius:10px; padding:10px 8px; text-align:center; '
+        f'font-size:11.5px; font-weight:700; color:#3D2A16; margin-bottom:10px;">{kartu["formula"]}</div>'
+        f'{keterangan_html}'
+        f'<div style="flex:1;"></div>'
+        f'<div style="background-color:{kartu["warna_utama"]}; border-radius:20px; padding:6px 10px; '
+        f'text-align:center; font-size:10.5px; font-weight:700; color:white;">{kartu["tag"]}</div>'
+        '</div>'
+    )
+
+# Path gambar ilustrasi di sisi kanan pengantar. Sesuaikan lagi kalau
+# lokasi filenya berubah / dipindah ke folder proyek.
+PATH_ILUSTRASI_HERO = r"C:\Users\Lenovo\Documents\Dashboard_PDRB\assets\ilustrasi.png"
+
+def render_hero_intro():
+    with st.container(key="panel_hero_intro"):
+        col_hero_teks, col_hero_gambar = st.columns([2, 1.2])
+
+        with col_hero_teks:
+            st.markdown(
+                '<span style="display:inline-block; background-color:#C85A1A; color:white; font-size:12px; '
+                'font-weight:700; padding:6px 16px; border-radius:20px; margin-bottom:16px;">Selamat Datang di SIMPONI Kota Palangka Raya</span>'
+                '<h1 style="margin:0 0 14px 0; font-size:26px; font-weight:800; color:#3D2A16; line-height:1.3;">'
+                'Bagaimana kita tahu ekonomi suatu daerah sedang tumbuh?</h1>'
+                '<p style="margin:0; font-size:14px; color:#5C4630; line-height:1.7;">'
+                'Angka pertumbuhan ekonomi bukan sekadar angka. Di baliknya, terdapat aktivitas berbagai lapangan usaha '
+                'dan komponen pengeluaran yang bersama-sama membentuk kinerja ekonomi daerah.<br><br>'
+                '<strong>SIMPONI</strong> membantu melihat cerita tersebut secara lebih sederhana - mulai dari seberapa '
+                'besar ekonomi yang dihasilkan, apakah ekonomi tumbuh, siapa yang berperan, hingga apa yang menjadi '
+                'sumber pertumbuhannya.</p>',
+                unsafe_allow_html=True
+            )
+
+        with col_hero_gambar:
+            st.markdown(
+                '<p style="font-style:italic; font-weight:600; color:#8A4B1E; font-size:15px; '
+                'text-align:right; margin:4px 0 14px 0; line-height:1.6;">'
+                'Dari angka, menuju pemahaman untuk pembangunan daerah yang lebih baik.</p>',
+                unsafe_allow_html=True
+            )
+            if os.path.exists(PATH_ILUSTRASI_HERO):
+                st.image(PATH_ILUSTRASI_HERO, width="stretch")
+            else:
+                # Placeholder ini hanya muncul kalau file di PATH_ILUSTRASI_HERO
+                # belum ditemukan di komputer yang menjalankan dashboard ini.
+                st.markdown(
+                    '<div style="width:100%; min-height:130px; border:2px dashed #D9B98A; border-radius:16px; '
+                    'display:flex; align-items:center; justify-content:center; color:#B98A55; font-size:12px; '
+                    'text-align:center; padding:8px;">'
+                    f'Gambar belum ditemukan di:<br>{PATH_ILUSTRASI_HERO}</div>',
+                    unsafe_allow_html=True
+                )
+
+def render_penjelasan_pdrb():
+    isi_baris = "".join(html_kartu_penjelasan(k) for k in DAFTAR_KARTU_PENJELASAN)
+
+    st.markdown(
+        '<div style="background-color:#FFFFFF; border-radius:20px; padding:24px; '
+        'box-shadow: 0 2px 10px rgba(122, 59, 16, 0.10); margin-bottom:24px;">'
+        '<div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">'
+        '<span style="font-size:20px;">🧭</span>'
+        '<span style="font-size:20px; font-weight:800; color:#3D2A16;">Memahami Pertumbuhan Ekonomi</span>'
+        '</div>'
+        '<p style="margin:0 0 20px 0; font-size:13px; color:#7A3B10;">'
+        'Untuk memahami cerita di balik angka PDRB, mari kita lihat melalui lima hal berikut:</p>'
+        f'<div class="baris-kartu-penjelasan">{isi_baris}</div>'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+render_hero_intro()
+render_penjelasan_pdrb()
+
+
+
+
 # --------------------------------------------
-col_panel_filter, col_panel_indikator, col_panel_nilai = st.columns([1, 1.6, 1.3])
-
-# Opsi Tahun & Triwulan TIDAK di-hardcode - diambil otomatis dari data
-# yang sudah diinput admin ke pdrb_agregat. Kalau baru rilis sampai
-# Triwulan II 2026, opsi berhenti di situ; begitu ada data baru
-# (mis. Triwulan II 2027), opsi tahun & triwulan otomatis bertambah.
-df_periode_tersedia = get_periode_tersedia()
-if df_periode_tersedia.empty:
-    daftar_tahun_tersedia = ["2026"]
-else:
-    daftar_tahun_tersedia = sorted(df_periode_tersedia["tahun"].unique().tolist())
-
-with col_panel_filter:
-    with st.container(key="panel_header_filter"):
-        st.markdown(
-            '<div class="judul-panel"><span class="ikon">▽</span><span class="teks">FILTER</span></div>',
-            unsafe_allow_html=True
-        )
-        tahun_dipilih = st.selectbox(
-            "Tahun", options=daftar_tahun_tersedia,
-            index=len(daftar_tahun_tersedia) - 1,
-            label_visibility="collapsed",
-            format_func=lambda x: f"Tahun: {x}"
-        )
-        if df_periode_tersedia.empty:
-            daftar_triwulan_tersedia = ["I"]
-        else:
-            daftar_triwulan_tersedia = df_periode_tersedia[
-                df_periode_tersedia["tahun"] == tahun_dipilih
-            ]["triwulan"].tolist()
-            if not daftar_triwulan_tersedia:
-                daftar_triwulan_tersedia = ["I"]
-        triwulan_dipilih = st.selectbox(
-            "Triwulan", options=daftar_triwulan_tersedia,
-            index=len(daftar_triwulan_tersedia) - 1,
-            label_visibility="collapsed",
-            format_func=lambda x: f"Triwulan: {x}"
-        )
-        indikator_dipilih = st.selectbox(
-            "Indikator", options=["yoy", "qtq", "ctc"],
-            label_visibility="collapsed",
-            format_func=lambda x: f"Indikator: {label_indikator(x)}"
-        )
-
-
+# SEMUA DEFINISI FUNGSI DI BAWAH INI (dikonsolidasi jadi satu blok) -
+# supaya urutan PEMANGGILANNYA di bagian bawah bisa mengikuti urutan
+# TAMPIL yang baru (Filter -> Highlight Peristiwa -> Panel Laju
+# Pertumbuhan & Nilai PDRB -> Grafik Tren -> Sumber Pertumbuhan ->
+# Tabel -> Distribusi -> Peta Kalteng), bukan urutan definisinya.
 # --------------------------------------------
-# AMBIL DATA AGREGAT DARI DATABASE
-# --------------------------------------------
-df_agregat = get_agregat(tahun_dipilih, triwulan_dipilih)
 
 def label_arah(nilai):
     """Balikin (teks, warna, simbol panah) sesuai arah nilai. None kalau datanya belum ada."""
@@ -363,56 +649,6 @@ def html_kartu_nilai_pdrb(judul, nilai):
     </div>
     """).strip()
 
-nilai_qtq = ambil_nilai(df_agregat, "adhk", "qtq")
-nilai_yoy = ambil_nilai(df_agregat, "adhk", "yoy")
-nilai_adhb = ambil_nilai(df_agregat, "adhb", "-")
-nilai_adhk = ambil_nilai(df_agregat, "adhk", "-")
-
-tw_sebelumnya, tahun_tw_sebelumnya = triwulan_sebelumnya(triwulan_dipilih, tahun_dipilih)
-label_qtq, warna_qtq, panah_qtq = label_arah(nilai_qtq)
-label_yoy, warna_yoy, panah_yoy = label_arah(nilai_yoy)
-
-with col_panel_indikator:
-    with st.container(key="panel_header_indikator"):
-        st.markdown(
-            '<div class="judul-panel"><span class="ikon">📊</span>'
-            '<span class="teks">LAJU PERTUMBUHAN PDRB PALANGKA RAYA</span></div>',
-            unsafe_allow_html=True
-        )
-        kartu_qtq_html = html_kartu_persen(
-            "Q-to-Q", nilai_qtq, warna_qtq, panah_qtq, label_qtq,
-            f"Dibanding Triwulan {tw_sebelumnya} {tahun_tw_sebelumnya}"
-        )
-        kartu_yoy_html = html_kartu_persen(
-            "Y-on-Y", nilai_yoy, warna_yoy, panah_yoy, label_yoy,
-            f"Dibanding Triwulan {triwulan_dipilih} {int(tahun_dipilih)-1}"
-        )
-        st.markdown(
-            f'<div style="display:flex; gap:16px;">{kartu_qtq_html}{kartu_yoy_html}</div>',
-            unsafe_allow_html=True
-        )
-
-with col_panel_nilai:
-    with st.container(key="panel_header_nilai"):
-        st.markdown(
-            '<div class="judul-panel">'
-            '<span class="ikon" style="border:2px solid white; border-radius:50%; width:20px; height:20px; '
-            'display:inline-flex; align-items:center; justify-content:center; font-size:9px; font-weight:800; color:white;">Rp</span>'
-            '<span class="teks">NILAI PDRB</span>'
-            '</div>',
-            unsafe_allow_html=True
-        )
-        with st.container(key="tab_pdrb_harga"):
-            tab_berlaku, tab_konstan = st.tabs(["Harga Berlaku", "Harga Konstan"])
-            with tab_berlaku:
-                st.markdown(html_kartu_nilai_pdrb("PDRB Harga Berlaku", nilai_adhb), unsafe_allow_html=True)
-            with tab_konstan:
-                st.markdown(html_kartu_nilai_pdrb("PDRB Harga Konstan", nilai_adhk), unsafe_allow_html=True)
-
-
-st.divider()
-
-
 
 # --------------------------------------------
 # GRAFIK TREN (mengikuti dropdown Tahun/Triwulan/Indikator di atas)
@@ -438,8 +674,8 @@ def render_grafik_tren(indikator_pertumbuhan, tahun_dipilih, triwulan_dipilih):
 
     judul_tren_html = f"""
     <h3 style="margin:0;">
-        LAJU PERTUMBUHAN PRODUK DOMESTIK REGIONAL BRUTO (PRDB) {rentang_tahun}
-        <span style="font-style:italic; font-weight:400;">(Indikator: {label_indikator(indikator_pertumbuhan)}) (persen)</span>
+        Pertumbuhan Ekonomi Kota Palangka Raya
+        <span style="font-style:italic; font-weight:400;">({label_indikator(indikator_pertumbuhan)}) (%)</span>
     </h3>
     """
     link_tren = get_link_sumber(
@@ -499,11 +735,6 @@ def render_grafik_tren(indikator_pertumbuhan, tahun_dipilih, triwulan_dipilih):
     st.plotly_chart(fig_tren, width='stretch', key=f"tren_{indikator_pertumbuhan}")
 
 
-render_grafik_tren(indikator_dipilih, tahun_dipilih, triwulan_dipilih)
-
-st.divider()
-
-
 # --------------------------------------------
 # FUNGSI BAR CHART & PANEL SUMBER PERTUMBUHAN (definisi fungsi)
 # --------------------------------------------
@@ -514,7 +745,8 @@ def buat_bar_chart(data, judul_grafik):
     fig.add_trace(go.Bar(
         x=data["Kategori"], y=data["Nilai"],
         text=[f"{v:.2f}".replace(".", ",") for v in data["Nilai"]],
-        textposition="outside", textfont=dict(size=16, color="black"),
+        textposition="inside", insidetextanchor="end",
+        textfont=dict(size=16, color="white", family="Arial Black"),
         marker_color=warna_bar, showlegend=False
     ))
     fig.update_layout(
@@ -580,6 +812,7 @@ def render_panel(data_lengkap, judul_grafik, key_halaman, pendekatan, item_per_h
                     st.rerun()
 
 
+
 # --------------------------------------------
 # FUNGSI FENOMENA (narasi analisis singkat per pendekatan)
 # --------------------------------------------
@@ -637,6 +870,7 @@ def render_fenomena(pendekatan, judul_seksi):
                 '</div>',
                 unsafe_allow_html=True
             )
+
 
 
 # --------------------------------------------
@@ -764,6 +998,7 @@ def render_tabel_triwulan(pendekatan, judul_seksi):
         else:
             st.markdown(buat_html_tabel_triwulan(baris_tabel), unsafe_allow_html=True)
 
+
 # --------------------------------------------
 # FUNGSI PANEL DISTRIBUSI (%) vs LAJU PERTUMBUHAN (%) (definisi fungsi)
 # --------------------------------------------
@@ -889,8 +1124,7 @@ def render_distribusi_laju(pendekatan, judul_seksi, indikator):
 
 
 # --------------------------------------------
-# AMBIL DATA LAPANGAN USAHA & PENGELUARAN DARI DATABASE
-# --------------------------------------------
+# FUNGSI SIAPKAN DATA BAR (dipakai section Sumber Pertumbuhan)
 # --------------------------------------------
 def siapkan_data_bar(pendekatan, indikator):
     df = get_data_kategori(
@@ -904,83 +1138,284 @@ def siapkan_data_bar(pendekatan, indikator):
     df_hasil = df_hasil[["Kategori", "Nilai", "Ikon"]].sort_values("Nilai", ascending=False).reset_index(drop=True)
     return df_hasil
 
-data_lapangan_usaha_full = siapkan_data_bar("lapangan_usaha", indikator_dipilih)
-data_pengeluaran_full = siapkan_data_bar("pengeluaran", indikator_dipilih)
 
+# --------------------------------------------
+# FILTER DATA (bar horizontal, tampil tepat setelah bagian penjelasan -
+# sesuai masukan sosialisasi supaya filter tidak "menumpuk" di kiri, dan
+# pengguna sudah paham dulu istilah-istilah PDRB sebelum memilih periode)
+# --------------------------------------------
+# Opsi Tahun & Triwulan TIDAK di-hardcode - diambil otomatis dari data
+# yang sudah diinput admin ke pdrb_agregat. Kalau baru rilis sampai
+# Triwulan II 2026, opsi berhenti di situ; begitu ada data baru
+# (mis. Triwulan II 2027), opsi tahun & triwulan otomatis bertambah.
+df_periode_tersedia = get_periode_tersedia()
+if df_periode_tersedia.empty:
+    daftar_tahun_tersedia = ["2026"]
+else:
+    daftar_tahun_tersedia = sorted(df_periode_tersedia["tahun"].unique().tolist())
+
+with st.container(key="panel_filter_bar"):
+    st.markdown(
+        '<div class="judul-panel-filter"><span class="teks">FILTER DATA</span></div>',
+        unsafe_allow_html=True
+    )
+
+    col_judul_filter, col_f_tahun, col_f_triwulan, col_f_jenis_data, col_f_indikator = st.columns(
+        [2, 1, 1, 1.3, 1.2]
+    )
+
+    with col_judul_filter:
+        st.markdown(
+            '<div style="display:flex; align-items:center; gap:12px;">'
+            '<img src="https://img.icons8.com/wired/64/filter.png" alt="filter" '
+            'style="width:40px; height:40px; flex-shrink:0;">'
+            '<div style="font-size:15px; font-weight:600; color:#7A3B10; line-height:1.5;">'
+            'Sesuaikan periode dan indikator yang ingin Anda lihat.</div>'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+    with col_f_tahun:
+        tahun_dipilih = st.selectbox(
+            "Tahun", options=daftar_tahun_tersedia,
+            index=len(daftar_tahun_tersedia) - 1,
+            format_func=lambda x: f"🗓️ {x}"
+        )
+
+    if df_periode_tersedia.empty:
+        daftar_triwulan_tersedia = ["I"]
+    else:
+        daftar_triwulan_tersedia = df_periode_tersedia[
+            df_periode_tersedia["tahun"] == tahun_dipilih
+        ]["triwulan"].tolist()
+        if not daftar_triwulan_tersedia:
+            daftar_triwulan_tersedia = ["I"]
+
+    with col_f_triwulan:
+        triwulan_dipilih = st.selectbox(
+            "Triwulan", options=daftar_triwulan_tersedia,
+            index=len(daftar_triwulan_tersedia) - 1,
+            format_func=lambda x: f"🗓️ {x}"
+        )
+
+    with col_f_jenis_data:
+        # Dipakai buat menentukan pendekatan (lapangan_usaha/pengeluaran)
+        # di section "Highlight Peristiwa", "Sumber Pertumbuhan", "Tabel
+        # Nilai PDRB per Triwulan", dan "Distribusi" di bawah - bagian
+        # lain (Laju Pertumbuhan PDRB Palangka Raya, Grafik Tren, Peta
+        # Kalteng) memang tidak dipecah per pendekatan, jadi tidak
+        # terpengaruh oleh pilihan ini.
+        jenis_data_dipilih = st.selectbox(
+            "Jenis Data", options=["Lapangan Usaha", "Pengeluaran"],
+            format_func=lambda x: f"🗃️ {x}"
+        )
+
+    with col_f_indikator:
+        indikator_dipilih = st.selectbox(
+            "Indikator", options=["yoy", "qtq", "ctc"],
+            format_func=lambda x: f"📈 {label_indikator(x)}"
+        )
 
 
 # --------------------------------------------
-# TAMPILKAN 2 PANEL BERSEBELAHAN: SUMBER PERTUMBUHAN PDRB
+# PENDEKATAN TERPILIH (dari filter "Jenis Data" di atas) - dipakai di
+# section "Highlight Peristiwa", "Sumber Pertumbuhan", "Tabel Nilai PDRB
+# per Triwulan", dan "Distribusi" supaya section-section itu cukup
+# menampilkan SATU pendekatan sesuai pilihan pengguna (bukan menumpuk
+# lapangan usaha & pengeluaran sekaligus seperti sebelumnya).
 # --------------------------------------------
-# --------------------------------------------
-col_kiri, col_kanan = st.columns(2)
+PETA_PENDEKATAN = {"Lapangan Usaha": "lapangan_usaha", "Pengeluaran": "pengeluaran"}
+pendekatan_dipilih = PETA_PENDEKATAN[jenis_data_dipilih]
 
-with col_kiri:
+
+# --------------------------------------------
+# HIGHLIGHT PERISTIWA (berdasarkan pilihan Jenis Data di Filter Data)
+# --------------------------------------------
+render_fenomena(pendekatan_dipilih, f"Highlight Peristiwa Perekonomian Palangka Raya Menurut {jenis_data_dipilih}")
+
+st.divider()
+
+
+# --------------------------------------------
+# AMBIL DATA AGREGAT DARI DATABASE
+# --------------------------------------------
+df_agregat = get_agregat(tahun_dipilih, triwulan_dipilih)
+
+nilai_qtq = ambil_nilai(df_agregat, "adhk", "qtq")
+nilai_yoy = ambil_nilai(df_agregat, "adhk", "yoy")
+nilai_ctc = ambil_nilai(df_agregat, "adhk", "ctc")
+nilai_adhb = ambil_nilai(df_agregat, "adhb", "-")
+nilai_adhk = ambil_nilai(df_agregat, "adhk", "-")
+
+tw_sebelumnya, tahun_tw_sebelumnya = triwulan_sebelumnya(triwulan_dipilih, tahun_dipilih)
+label_qtq, warna_qtq, panah_qtq = label_arah(nilai_qtq)
+label_yoy, warna_yoy, panah_yoy = label_arah(nilai_yoy)
+label_ctc, warna_ctc, panah_ctc = label_arah(nilai_ctc)
+
+col_panel_indikator, col_panel_nilai = st.columns([1.6, 1.3])
+
+with col_panel_indikator:
+    with st.container(key="panel_header_indikator"):
+        st.markdown(
+            '<div class="judul-panel"><span class="ikon">📊</span>'
+            '<span class="teks">LAJU PERTUMBUHAN PDRB PALANGKA RAYA</span></div>',
+            unsafe_allow_html=True
+        )
+        kartu_qtq_html = html_kartu_persen(
+            "Q-to-Q", nilai_qtq, warna_qtq, panah_qtq, label_qtq,
+            f"Dibanding Triwulan {tw_sebelumnya} {tahun_tw_sebelumnya}"
+        )
+        kartu_yoy_html = html_kartu_persen(
+            "Y-on-Y", nilai_yoy, warna_yoy, panah_yoy, label_yoy,
+            f"Dibanding Triwulan {triwulan_dipilih} {int(tahun_dipilih)-1}"
+        )
+        kartu_ctc_html = html_kartu_persen(
+            "C-to-C", nilai_ctc, warna_ctc, panah_ctc, label_ctc,
+            f"Dibanding Kumulatif s.d. Tw {triwulan_dipilih} {int(tahun_dipilih)-1}"
+        )
+        st.markdown(
+            f'<div style="display:flex; gap:16px;">{kartu_qtq_html}{kartu_yoy_html}{kartu_ctc_html}</div>',
+            unsafe_allow_html=True
+        )
+
+with col_panel_nilai:
+    with st.container(key="panel_header_nilai"):
+        st.markdown(
+            '<div class="judul-panel">'
+            '<span class="ikon" style="border:2px solid white; border-radius:50%; width:20px; height:20px; '
+            'display:inline-flex; align-items:center; justify-content:center; font-size:9px; font-weight:800; color:white;">Rp</span>'
+            '<span class="teks">NILAI PDRB</span>'
+            '</div>',
+            unsafe_allow_html=True
+        )
+        with st.container(key="tab_pdrb_harga"):
+            tab_berlaku, tab_konstan = st.tabs(["Harga Berlaku", "Harga Konstan"])
+            with tab_berlaku:
+                st.markdown(html_kartu_nilai_pdrb("PDRB Harga Berlaku", nilai_adhb), unsafe_allow_html=True)
+            with tab_konstan:
+                st.markdown(html_kartu_nilai_pdrb("PDRB Harga Konstan", nilai_adhk), unsafe_allow_html=True)
+
+
+st.divider()
+
+
+render_grafik_tren(indikator_dipilih, tahun_dipilih, triwulan_dipilih)
+
+st.divider()
+
+# --------------------------------------------
+# SUMBER PERTUMBUHAN PDRB (berdasarkan pilihan Jenis Data di Filter Data)
+# + kartu Link Publikasi PDRB di sebelahnya
+# --------------------------------------------
+data_bar_terpilih = siapkan_data_bar(pendekatan_dipilih, indikator_dipilih)
+
+col_sumber_pertumbuhan, col_publikasi = st.columns([2, 1])
+
+with col_sumber_pertumbuhan:
     with st.container(key="panel_kiri"):
         render_panel(
-            data_lapangan_usaha_full,
-            f"SUMBER PERTUMBUHAN PDRB MENURUT LAPANGAN USAHA TRIWULAN {triwulan_dipilih} {tahun_dipilih} ({label_indikator(indikator_dipilih)}) (persen)",
-            key_halaman="halaman_kiri",
-            pendekatan="lapangan_usaha"
+            data_bar_terpilih,
+            f"SUMBER PERTUMBUHAN PDRB MENURUT {jenis_data_dipilih.upper()} TRIWULAN {triwulan_dipilih} {tahun_dipilih} ({label_indikator(indikator_dipilih)}) (%)",
+            key_halaman="halaman_sumber_pertumbuhan",
+            pendekatan=pendekatan_dipilih
         )
 
-with col_kanan:
-    with st.container(key="panel_kanan"):
-        render_panel(
-            data_pengeluaran_full,
-            f"SUMBER PERTUMBUHAN PDRB MENURUT PENGELUARAN TRIWULAN {triwulan_dipilih} {tahun_dipilih} ({label_indikator(indikator_dipilih)}) (persen)",
-            key_halaman="halaman_kanan",
-            pendekatan="pengeluaran"
-        )
+with col_publikasi:
+    with st.container(key="panel_kanan_wrapper"):
+        with st.container(key="panel_kanan"):
+            # Link publikasi diambil dari tabel publikasi_pdrb berdasarkan
+            # tahun & Jenis Data yang aktif di Filter Data. Kalau tahun yang
+            # dipilih belum ada publikasinya, get_link_publikasi otomatis
+            # mundur ke tahun TERDEKAT DI BAWAHNYA yang jenis datanya sama
+            # (tidak pernah mengambil publikasi dari tahun yang lebih baru).
+            link_publikasi = get_link_publikasi(
+                tahun=tahun_dipilih, jenis_data=pendekatan_dipilih
+            )
+            teks_tombol_publikasi = f"Publikasi PDRB menurut {jenis_data_dipilih}"
+            if link_publikasi:
+                tombol_publikasi_html = (
+                    f'<a href="{link_publikasi}" target="_blank" rel="noopener noreferrer" '
+                    'style="background-color:#C85A1A; color:white; text-decoration:none; font-weight:700; '
+                    'font-size:13px; padding:10px 22px; border-radius:20px; display:inline-block; white-space:nowrap;">'
+                    f'📖 {teks_tombol_publikasi}</a>'
+                )
+            else:
+                tombol_publikasi_html = (
+                    '<span style="background-color:#EFE3C8; color:#A8794F; font-weight:700; font-size:13px; '
+                    'padding:10px 22px; border-radius:20px; display:inline-block; white-space:nowrap;">'
+                    f'{teks_tombol_publikasi} - Belum Tersedia</span>'
+                )
+            gambar_publikasi = muat_gambar_base64("assets/publikasi.png")
+            tag_gambar_publikasi = (
+                f'<img src="{gambar_publikasi}" alt="Publikasi PDRB" '
+                'style="width:90px; height:90px; margin-bottom:12px; object-fit:contain;">'
+                if gambar_publikasi else
+                '<div style="font-size:48px; margin-bottom:12px;">📚</div>'
+            )
+            st.markdown(
+                '<div style="text-align:center; display:flex; flex-direction:column; align-items:center; '
+                'justify-content:center; height:100%; padding:12px 0;">'
+                f'{tag_gambar_publikasi}'
+                '<p style="font-weight:800; font-size:15px; color:#3D2A16; margin:0 0 6px 0;">Publikasi PDRB</p>'
+                '<p style="font-size:12px; color:#7A3B10; margin:0 0 18px 0; line-height:1.6;">'
+                'Baca publikasi lengkap PDRB Kota Palangka Raya.</p>'
+                f'{tombol_publikasi_html}'
+                '</div>',
+                unsafe_allow_html=True
+            )
+
+        # --------------------------------------------
+        # CARD BARU: Layanan & Kontak BPS Kota Palangka Raya
+        # Gambar pelayanan.png di atas, 2 tombol link (Website & WhatsApp)
+        # berdampingan di bawahnya.
+        # --------------------------------------------
+        with st.container(key="panel_kanan_kontak"):
+            url_bps = "https://palangkakota.bps.go.id"
+            url_wa = "https://wa.me/6285810006271"
+
+            gambar_pelayanan = muat_gambar_base64("assets/pelayanan.png")
+            tag_gambar_pelayanan = (
+                f'<img src="{gambar_pelayanan}" alt="Layanan BPS" '
+                'style="width:90px; height:90px; margin-bottom:12px; object-fit:contain;">'
+                if gambar_pelayanan else
+                '<div style="font-size:48px; margin-bottom:12px;">📞</div>'
+            )
+            st.markdown(
+                '<div style="text-align:center; display:flex; flex-direction:column; align-items:center; '
+                'justify-content:center; height:100%; padding:12px 0;">'
+                f'{tag_gambar_pelayanan}'
+                '<p style="font-weight:800; font-size:15px; color:#3D2A16; margin:0 0 6px 0;">Layanan BPS Kota Palangka Raya</p>'
+                '<p style="font-size:12px; color:#7A3B10; margin:0 0 18px 0; line-height:1.6;">'
+                'Hubungi kami untuk informasi lebih lanjut.</p>'
+                '<div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">'
+                f'<a href="{url_bps}" target="_blank" rel="noopener noreferrer" '
+                'style="background-color:#C85A1A; color:white; text-decoration:none; font-weight:700; '
+                'font-size:12px; padding:10px 16px; border-radius:20px; display:inline-block; white-space:nowrap;">'
+                '🌐 Website BPS</a>'
+                f'<a href="{url_wa}" target="_blank" rel="noopener noreferrer" '
+                'style="background-color:#C85A1A; color:white; text-decoration:none; font-weight:700; '
+                'font-size:12px; padding:10px 16px; border-radius:20px; display:inline-block; white-space:nowrap;">'
+                '💬 0858-1000-6271</a>'
+                '</div>'
+                '</div>',
+                unsafe_allow_html=True
+            )
 
 st.divider()
 
 
-
 # --------------------------------------------
-# FENOMENA PDRB LAPANGAN USAHA
+# TABEL PDRB PER TRIWULAN (berdasarkan pilihan Jenis Data di Filter Data)
 # --------------------------------------------
-render_fenomena("lapangan_usaha", "Catatan Peristiwa Perekonomian Palangka Raya Menurut Lapangan Usaha")
+render_tabel_triwulan(pendekatan_dipilih, f"PDRB Triwulanan menurut {jenis_data_dipilih} {tahun_dipilih} (Miliar Rupiah)")
 
 st.divider()
 
 
 # --------------------------------------------
-# TABEL PDRB PER TRIWULAN - LAPANGAN USAHA
+# DISTRIBUSI (%) vs LAJU PERTUMBUHAN (%) (berdasarkan pilihan Jenis Data di Filter Data)
 # --------------------------------------------
-render_tabel_triwulan("lapangan_usaha", f"Tabel Nilai PDRB per Triwulan menurut Lapangan Usaha Tahun {tahun_dipilih} (Miliar Rupiah)")
-
-st.divider()
-
-
-# --------------------------------------------
-# DISTRIBUSI (%) vs LAJU PERTUMBUHAN (%) - LAPANGAN USAHA
-# --------------------------------------------
-render_distribusi_laju("lapangan_usaha", "Distribusi dan Laju Pertumbuhan PDRB Menurut Lapangan Usaha (persen)", indikator_dipilih)
-
-st.divider()
-
-
-# --------------------------------------------
-# FENOMENA PDRB PENGELUARAN
-# --------------------------------------------
-render_fenomena("pengeluaran", "Catatan Peristiwa Perekonomian Palangka Raya Menurut Pengeluaran")
-
-st.divider()
-
-
-# --------------------------------------------
-# TABEL PDRB PER TRIWULAN - PENGELUARAN
-# --------------------------------------------
-render_tabel_triwulan("pengeluaran", f"Tabel Nilai PDRB per Triwulan menurut Pengeluaran Tahun {tahun_dipilih} (Miliar Rupiah)")
-
-st.divider()
-
-
-# --------------------------------------------
-# DISTRIBUSI (%) vs LAJU PERTUMBUHAN (%) - PENGELUARAN
-# --------------------------------------------
-render_distribusi_laju("pengeluaran", "Distribusi dan Laju Pertumbuhan PDRB Menurut Pengeluaran (persen)", indikator_dipilih)
+render_distribusi_laju(pendekatan_dipilih, f"Distribusi dan Laju Pertumbuhan PDRB Menurut {jenis_data_dipilih} (%)", indikator_dipilih)
 
 st.divider()
 
@@ -991,7 +1426,7 @@ st.divider()
 # --------------------------------------------
 judul_wilayah_html = (
     "<h3 style='margin:0;'>Laju Pertumbuhan PDRB Kabupaten/Kota se-Kalimantan Tengah "
-    f"<span style='font-style:italic; font-weight:400;'>(Indikator pertumbuhan : {label_indikator(indikator_dipilih)}) (persen)</span></h3>"
+    f"<span style='font-style:italic; font-weight:400;'>({label_indikator(indikator_dipilih)}) (%)</span></h3>"
 )
 link_wilayah = get_link_sumber(
     jenis_indikator="Laju Pertumbuhan Kalteng",
@@ -1072,7 +1507,8 @@ with col_bar_wilayah:
         x=df_wilayah_urut["Pertumbuhan"], y=df_wilayah_urut["Wilayah"],
         orientation="h",
         text=[f"{v:.2f}".replace(".", ",") for v in df_wilayah_urut["Pertumbuhan"]],
-        textposition="outside", textfont=dict(size=12, color="black"),
+        textposition="inside", insidetextanchor="end",
+        textfont=dict(size=12, color="white", family="Arial Black"),
         marker_color=warna_bar_wilayah, showlegend=False
     ))
     fig_bar_wilayah.update_layout(
@@ -1096,7 +1532,6 @@ with col_bar_wilayah:
     )
 
 st.divider()
-
 
 
 # --------------------------------------------
