@@ -245,6 +245,7 @@ st.markdown("""
     }
     .st-key-panel_hero_intro {
         background-color: #FBF1DE;
+        border: 3px dashed #F07C2A;
         border-radius: 20px;
         padding: 20px 20px 4px 20px;
         margin-bottom: 24px;
