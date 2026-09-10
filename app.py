@@ -82,7 +82,7 @@ st.markdown("""
     .st-key-panel_kanan, .st-key-panel_kanan_kontak {
         border: 3px dashed #F07C2A;
         border-radius: 16px;
-        padding: 16px;
+        padding: 0 16px 32px 16px;
         box-sizing: border-box;
         flex: 1;
         margin: 0 !important;
@@ -1349,13 +1349,13 @@ with col_publikasi:
             gambar_publikasi = muat_gambar_base64("assets/publikasi.png")
             tag_gambar_publikasi = (
                 f'<img src="{gambar_publikasi}" alt="Publikasi PDRB" '
-                'style="width:90px; height:90px; margin-bottom:12px; object-fit:contain;">'
+                'style="width:140px; height:140px; object-fit:contain;">'
                 if gambar_publikasi else
-                '<div style="font-size:48px; margin-bottom:12px;">📚</div>'
+                '<div style="font-size:48px;">📚</div>'
             )
             st.markdown(
                 '<div style="text-align:center; display:flex; flex-direction:column; align-items:center; '
-                'justify-content:center; height:100%; padding:12px 0;">'
+                'justify-content:center; height:100%; padding:0;">'
                 f'{tag_gambar_publikasi}'
                 '<p style="font-weight:800; font-size:15px; color:#3D2A16; margin:0 0 6px 0;">Publikasi PDRB</p>'
                 '<p style="font-size:12px; color:#7A3B10; margin:0 0 18px 0; line-height:1.6;">'
@@ -1377,13 +1377,13 @@ with col_publikasi:
             gambar_pelayanan = muat_gambar_base64("assets/pelayanan.png")
             tag_gambar_pelayanan = (
                 f'<img src="{gambar_pelayanan}" alt="Layanan BPS" '
-                'style="width:90px; height:90px; margin-bottom:12px; object-fit:contain;">'
+                'style="width:140px; height:140px; object-fit:contain;">'
                 if gambar_pelayanan else
-                '<div style="font-size:48px; margin-bottom:12px;">📞</div>'
+                '<div style="font-size:48px;">📞</div>'
             )
             st.markdown(
                 '<div style="text-align:center; display:flex; flex-direction:column; align-items:center; '
-                'justify-content:center; height:100%; padding:12px 0;">'
+                'justify-content:center; height:100%; padding:0;">'
                 f'{tag_gambar_pelayanan}'
                 '<p style="font-weight:800; font-size:15px; color:#3D2A16; margin:0 0 6px 0;">Layanan BPS Kota Palangka Raya</p>'
                 '<p style="font-size:12px; color:#7A3B10; margin:0 0 18px 0; line-height:1.6;">'
