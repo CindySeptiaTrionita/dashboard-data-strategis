@@ -507,7 +507,7 @@ def html_kartu_penjelasan(kartu):
 
 # Path gambar ilustrasi di sisi kanan pengantar. Sesuaikan lagi kalau
 # lokasi filenya berubah / dipindah ke folder proyek.
-PATH_ILUSTRASI_HERO = r"C:\Users\Lenovo\Documents\Dashboard_PDRB\assets\ilustrasi.png"
+PATH_ILUSTRASI_HERO = "assets/ilustrasi.png"
 
 def render_hero_intro():
     with st.container(key="panel_hero_intro"):
@@ -1338,7 +1338,7 @@ with col_publikasi:
                     f'<a href="{link_publikasi}" target="_blank" rel="noopener noreferrer" '
                     'style="background-color:#C85A1A; color:white; text-decoration:none; font-weight:700; '
                     'font-size:13px; padding:10px 22px; border-radius:20px; display:inline-block; white-space:nowrap;">'
-                    f'{teks_tombol_publikasi}</a>'
+                    f'📖 {teks_tombol_publikasi}</a>'
                 )
             else:
                 tombol_publikasi_html = (
